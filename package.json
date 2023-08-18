@@ -11,7 +11,7 @@
     "bitcoinjs-lib": "^3.2.0",
     "bs58": "^4.0.1",
     "ethereumjs-wallet": "^0.6.0",
-    "web3": "^1.7.0"
+    "web3": "^1.10.1"
   },
   "devDependencies": {
     "chai": "^4.2.0"
