@@ -1,0 +1,8 @@
+{
+    "bitcoin": {
+        "host": "localhost:18332",
+        "user": "rsk",
+        "password": "rsk",
+        "network": "testnet"
+    }
+}
