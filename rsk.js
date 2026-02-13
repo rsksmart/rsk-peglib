@@ -184,7 +184,13 @@ var getRetiringFederatorsPublicMultiKeys = async function getRetiringFederatorsP
 var getNonce = async function getNonce(address) {
   // web3 v4: use instance utils; getTransactionCount returns BigInt
   var result = await this.eth.getTransactionCount(this.utils.toChecksumAddress(address), "pending");
-  return result;
+  if (typeof result === 'bigint') {
+    if (result > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error('Nonce is too large to be represented as a number');
+    }
+    return Number(result);
+  }
+  return Number(result);
 };
 
 var getGasPrice = async function getGasPrice() {
@@ -194,7 +200,7 @@ var getGasPrice = async function getGasPrice() {
   if (minGasPrice <= 1) {
     return 1;
   }
-  return Math.ceil(minGasPrice * 1.01);
+  return Math.ceil(minGasPrice * 101n / 100n);
 }
 
 var sendTx = function(tx, mine, pollInterval = 500, maxAttempts = 120) {
