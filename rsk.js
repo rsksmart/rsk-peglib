@@ -1,4 +1,4 @@
-var Web3 = require('web3');
+const { Web3 } = require('web3');
 var bitcoin = require('./bitcoin');
 var bridge = require('./bridge');
 var utils = require('./utils');
@@ -188,7 +188,8 @@ var getRetiringFederatorsPublicMultiKeys = async function getRetiringFederatorsP
 };
 
 var getNonce =  async function getNonce(address){
-  var result = await this.eth.getTransactionCount(Web3.utils.toChecksumAddress(address), "pending");
+  const { toChecksumAddress } = require('web3').utils;
+  var result = await this.eth.getTransactionCount(toChecksumAddress(address), "pending");
   return result;
 }
 
