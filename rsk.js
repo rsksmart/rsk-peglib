@@ -1,69 +1,63 @@
-var Web3 = require('web3');
-var bitcoin = require('./bitcoin');
-var bridge = require('./bridge');
-var utils = require('./utils');
+const { Web3 } = require('web3');
+const bitcoin = require('./bitcoin');
+const bridge = require('./bridge');
+const utils = require('./utils');
 
 
-var getClient = function(server) {
+const getClient = (server) => {
   if(!server.startsWith('http') && !server.startsWith('https')){
     server = 'http://' + server;
   }
 
-  var client = new Web3(server);
+  const client = new Web3(server);
 
+  // Custom RPC via requestManager (web3 v4: no callback-based currentProvider.send)
   client.evm = {
     //This is because in regtest the RSK node doesn't increase block time
-    mine : function increaseTime () {
-      var duration = 1;
-      const id = Date.now();
-    
-      return new Promise((resolve, reject) => {
-        client.currentProvider.send({
-          jsonrpc: '2.0',
-          method: 'evm_increaseTime',
-          params: [duration],
-          id: id,
-        }, err1 => {
-          if (err1) return reject(err1);
-    
-          client.currentProvider.send({
-            jsonrpc: '2.0',
-            method: 'evm_mine',
-            id: id + 1,
-          }, (err2, res) => {
-            return err2 ? reject(err2) : resolve(res);
-          });
-        });
+    mine: async () => {
+      await client.requestManager.send({
+        method: 'evm_increaseTime',
+        params: [1],
+      });
+      return client.requestManager.send({
+        method: 'evm_mine',
+        params: [],
       });
     }
   };
 
-  client.eth.extend({
-    property: 'personal',
-    methods: [{
-      name: 'newAccountWithSeed',
-      call: 'personal_newAccountWithSeed',
-      params: 1
-    }]
-  });
+  // web3 v4: eth.extend() not implemented; add RSK-specific personal methods via requestManager
+  if (!client.eth.personal) client.eth.personal = {};
+  client.eth.personal.newAccountWithSeed = (seed) => {
+    return client.requestManager.send({
+      method: 'personal_newAccountWithSeed',
+      params: [seed],
+    });
+  };
+  // Always use our wrapper so passphrase defaults to '' and RSK RPC is used (used by peg-utils)
+  client.eth.personal.importRawKey = (key, passphrase) => {
+    return client.requestManager.send({
+      method: 'personal_importRawKey',
+      params: [key, passphrase || ''],
+    });
+  };
 
-  client.extend({
-    property: 'fed',
-    methods: [{
-      name: 'updateBridge',
-      call: 'fed_updateBridge',
-      params: 0
-    }]
-  });
+  // web3 v4: use requestManager instead of client.extend() for custom RPC
+  client.fed = {
+    updateBridge: () => {
+      return client.requestManager.send({
+        method: 'fed_updateBridge',
+        params: [],
+      });
+    }
+  };
 
-  client.extend({
-    property: 'eth',
-    methods: [({
-      name: 'bridgeState',
-      call: 'eth_bridgeState',
-      params: 0
-    })]
-  });
+  client.eth.bridgeState = () => {
+    return client.requestManager.send({
+      method: 'eth_bridgeState',
+      params: [],
+    });
+  };
 
   client.rsk = {
     bridge: bridge.buildBrige(client),
@@ -187,18 +181,20 @@ var getRetiringFederatorsPublicMultiKeys = async function getRetiringFederatorsP
   };
 };
 
-var getNonce =  async function getNonce(address){
-  var result = await this.eth.getTransactionCount(Web3.utils.toChecksumAddress(address), "pending");
+var getNonce = async function getNonce(address) {
+  // web3 v4: use instance utils; getTransactionCount returns BigInt
+  var result = await this.eth.getTransactionCount(this.utils.toChecksumAddress(address), "pending");
   return result;
-}
+};
 
 var getGasPrice = async function getGasPrice() {
   var block = await this.eth.getBlock("latest");
-  if (block.minimumGasPrice <= 1) {
+  // web3 v4: block numeric fields (e.g. minimumGasPrice) can be BigInt
+  var minGasPrice = block && block.minimumGasPrice != null ? Number(block.minimumGasPrice) : 0;
+  if (minGasPrice <= 1) {
     return 1;
-  } else {
-    return block.minimumGasPrice * 1.01;
   }
+  return Math.ceil(minGasPrice * 1.01);
 }
 
 var sendTx = function(tx, mine, pollInterval = 500, maxAttempts = 120) {
