@@ -42,6 +42,17 @@ const getClient = (server) => {
     });
   };
 
+  // Backward compatibility: web3-eth-personal requires unlockDuration (third arg); older callers use unlockAccount(address, password).
+  // Default unlockDuration to 0 (unlock until node restarts) when omitted. Pass as hex string (node expects hex).
+  client.eth.personal.unlockAccount = (address, password, unlockDuration) => {
+    const duration = unlockDuration !== undefined ? unlockDuration : 0;
+    const durationHex = client.utils.numberToHex(duration);
+    return client.requestManager.send({
+      method: 'personal_unlockAccount',
+      params: [address, password, durationHex],
+    });
+  };
+
   // web3 v4: use requestManager instead of client.extend() for custom RPC
   client.fed = {
     updateBridge: () => {
